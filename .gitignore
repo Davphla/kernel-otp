@@ -1,0 +1,50 @@
+# Ignore object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Ignore kernel modules
+*.mod
+*.mod.c
+*.symvers
+modules.order
+Module.symvers
+Module.markers
+
+# Ignore temporary files
+*.tmp
+*.bak
+*.swp
+
+# Ignore build directories
+/build/
+/out/
+/*.d
+
+# Ignore patch files
+*.patch
+
+# Ignore cscope files
+cscope.*
+ncscope.*
+
+# Ignore tags
+tags
+TAGS
+
+# Ignore other generated files
+*.cmd
+*.dwo
+*.lst
+*.su
+*.mod.c
+*.order
+*.symtypes
+*.lzo
+*.xz
+*.gz
+*.bz2
+*.lzma
+*.zst
+.vagrant
