@@ -24,6 +24,8 @@
         "type_traits": "c",
         "variant": "c",
         "algorithm": "c",
-        "cmath": "c"
+        "cmath": "c",
+        "otp_module.h": "c",
+        "string.h": "c"
     }
 }

@@ -1,39 +1,4 @@
-#include <linux/module.h>
-#include <linux/fs.h>
-#include <linux/uaccess.h>
-#include <linux/device.h>
-#include <linux/slab.h>
-#include <linux/string.h>
-#include <linux/ioctl.h>
-#include <linux/crypto.h>
-#include <linux/time.h>
-#include <crypto/hash.h>
-
-#define DEVICE_LIST_NAME "otp_list"
-#define DEVICE_TOTP_NAME "otp_totp"
-#define CLASS_NAME "otp_class"
-
-#define MAX_PASSWORDS 10
-#define MAX_PASSWORD_LEN 32
-#define TOTP_KEY_LEN 16
-#define TOTP_INTERVAL 30
-
-#define IOCTL_ADD_PASSWORD _IOW('o', 1, char*)
-#define IOCTL_SET_TOTP_KEY _IOW('o', 2, char*)
-#define IOCTL_SET_TOTP_INTERVAL _IOW('o', 3, int)
-#define IOCTL_VERIFY_PASSWORD _IOW('o', 4, char*)
-#define IOCTL_VERIFY_TOTP _IOW('o', 5, char*)
-
-struct otp_list_data {
-    char passwords[MAX_PASSWORDS][MAX_PASSWORD_LEN];
-    int password_count;
-    int current_password_index;
-};
-
-struct otp_totp_data {
-    char key[TOTP_KEY_LEN];
-    int interval;
-};
+#include "otp_module.h"
 
 static int otp_list_major_number;
 static int otp_totp_major_number;
@@ -42,13 +7,6 @@ static struct device* otp_list_device = NULL;
 static struct device* otp_totp_device = NULL;
 static struct otp_list_data otp_list;
 static struct otp_totp_data otp_totp;
-
-static int otp_open(struct inode* inodep, struct file* filep);
-static int otp_release(struct inode* inodep, struct file* filep);
-static ssize_t otp_list_read(struct file* filep, char* buffer, size_t len, loff_t* offset);
-static ssize_t otp_totp_read(struct file* filep, char* buffer, size_t len, loff_t* offset);
-static long otp_list_ioctl(struct file* filep, unsigned int cmd, unsigned long arg);
-static long otp_totp_ioctl(struct file* filep, unsigned int cmd, unsigned long arg);
 
 static struct file_operations otp_list_fops = {
     .open = otp_open,
@@ -64,6 +22,10 @@ static struct file_operations otp_totp_fops = {
     .unlocked_ioctl = otp_totp_ioctl,
 };
 
+/******************************************/
+/*    Generic file_operations function    */
+/******************************************/
+
 static int otp_open(struct inode* inodep, struct file* filep) {
     printk(KERN_INFO "OTP Device Opened\n");
     return 0;
@@ -73,6 +35,10 @@ static int otp_release(struct inode* inodep, struct file* filep) {
     printk(KERN_INFO "OTP Device Closed\n");
     return 0;
 }
+
+/******************************************/
+/*    OTP-list file_operation functions   */  
+/******************************************/
 
 static ssize_t otp_list_read(struct file* filep, char* buffer, size_t len, loff_t* offset) {
     char otp[MAX_PASSWORD_LEN + 1];
@@ -136,6 +102,11 @@ static long otp_list_ioctl(struct file* filep, unsigned int cmd, unsigned long a
 
     return 0;
 }
+
+
+/******************************************/
+/*    OTP-TOTP file_operation functions   */  
+/******************************************/
 
 static int generate_totp(char* key, int interval, char* output, size_t len) {
     struct timespec64 ts;
@@ -235,6 +206,15 @@ static long otp_totp_ioctl(struct file* filep, unsigned int cmd, unsigned long a
     return 0;
 }
 
+/**
+ * otp_init - Initializes the OTP kernel module.
+ *
+ * This function initializes the OTP module by setting up character devices
+ * for password-based OTP and TOTP. It registers character devices, creates a
+ * device class, and initializes the device structures.
+ *
+ * @return: 0 on success, negative error code on failure.
+ */
 static int __init otp_init(void) {
     otp_list.password_count = 0;
     otp_list.current_password_index = 0;
@@ -279,6 +259,13 @@ static int __init otp_init(void) {
     return 0;
 }
 
+/**
+ * otp_exit - Cleans up and exits the OTP kernel module.
+ *
+ * This function removes the created devices, destroys the class, and unregisters
+ * the character devices for both OTP list and TOTP functionality. It ensures proper
+ * cleanup when the module is unloaded.
+ */
 static void __exit otp_exit(void) {
     device_destroy(otp_class, MKDEV(otp_list_major_number, 0));
     device_destroy(otp_class, MKDEV(otp_totp_major_number, 1));

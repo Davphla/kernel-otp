@@ -3,6 +3,15 @@
 
 #include <linux/ioctl.h>
 #include <linux/module.h>
+#include <linux/fs.h>
+#include <linux/uaccess.h>
+#include <linux/device.h>
+#include <linux/slab.h>
+#include <linux/string.h>
+#include <linux/ioctl.h>
+#include <linux/crypto.h>
+#include <linux/time.h>
+#include <crypto/hash.h>
 
 #define DEVICE_LIST_NAME "otp_list"
 #define DEVICE_TOTP_NAME "otp_totp"
