@@ -13,6 +13,8 @@
 #include <linux/time.h>
 #include <crypto/hash.h>
 
+#include <sys/queue.h>
+
 #define DEVICE_LIST_NAME "otp_list"
 #define DEVICE_TOTP_NAME "otp_totp"
 #define CLASS_NAME "otp_class"
@@ -30,16 +32,24 @@
 #define IOCTL_VERIFY_TOTP _IOW('o', 5, char *)
 
 /**
- * struct otp_list_data - Stores OTP passwords.
- * @passwords: Array of passwords.
- * @password_count: Number of stored passwords.
- * @current_password_index: Current read index.
+ * Linked list of password
  */
 struct otp_list_data {
-	char passwords[MAX_PASSWORDS][MAX_PASSWORD_LEN];
-	int password_count;
-	int current_password_index;
+	char password[MAX_PASSWORD_LEN];
+	SLIST_ENTRY(my_entry) entries;
 };
+
+inline struct otp_list_data *new_entry(const char *val)
+{
+	struct otp_list_data *e = kmalloc(sizeof(struct otp_list_data), GFP_KERNEL);
+	if (!e) {
+		perror("malloc");
+        return NULL;
+	}
+	strncpy(e->password, val, MAX_PASSWORD_LEN);
+    e->password[MAX_PASSWORD_LEN - 1] = '\0';
+	return e;
+}
 
 /**
  * struct otp_totp_data - Stores TOTP key and interval.
