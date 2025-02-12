@@ -26,6 +26,25 @@
         "algorithm": "c",
         "cmath": "c",
         "otp_module.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "cstdlib": "c",
+        "charconv": "c",
+        "expected": "c",
+        "ratio": "c",
+        "system_error": "c",
+        "array": "c",
+        "utility": "c",
+        "memory": "c",
+        "semaphore": "c",
+        "shared_mutex": "c",
+        "stop_token": "c",
+        "queue.h": "c",
+        "time.h": "c",
+        "list.h": "c",
+        "device.h": "c",
+        "driver.h": "c",
+        "fs.h": "c",
+        "uaccess.h": "c",
+        "crypto.h": "c"
     }
 }

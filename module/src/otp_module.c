@@ -9,7 +9,8 @@ static int otp_totp_major_number;
 static struct class *otp_class = NULL;
 static struct device *otp_list_device = NULL;
 static struct device *otp_totp_device = NULL;
-SLIST_HEAD(head, otp_list_data) otp_list;
+
+static struct otp_list_data otp_list;
 static struct otp_totp_data otp_totp;
 
 // static struct password_data otp_list;
@@ -48,36 +49,43 @@ static int otp_release(struct inode *inodep, struct file *filep)
 /*    OTP-list file_operation functions   */
 /******************************************/
 
-/**
- * read and return all password ?
- * TODO need to redo this
- */
-static ssize_t otp_list_read(struct file *filep, char *buffer, size_t len,
+static ssize_t otp_list_read(struct file *filep, char __user *buffer, size_t len,
 			     loff_t *offset)
 {
-	struct otp_list_data *otp = SLIST_FIRST(&otp_list);
+	struct otp_list_node *node = otp_list.head;
+	char temp_buffer[MAX_PASSWORD_LEN * 10] = {};
+	size_t used = 0;
 
-	if (!otp) {
+	if (!node) {
 		pr_debug("OTP List: No password found\n");
-		return -EFAULT;
+		return simple_read_from_buffer(buffer, len, offset, "No password found\n", 18);
 	}
-	pr_debug("OTP List: Reading password\n");
-	if (copy_to_user(buffer, otp->password, strlen(otp) + 1))
+	pr_debug("OTP List: Reading all stored passwords\n");
+	while (node && used + MAX_PASSWORD_LEN + 2 < len) {
+		int written = snprintf(temp_buffer + used, MAX_PASSWORD_LEN + 2, "%s\n", node->password);
+		if (written < 0)
+			return -EFAULT;
+
+		used += written;
+		node = node->next;
+	}
+	if (copy_to_user(buffer, temp_buffer, used))
 		return -EFAULT;
-	return strlen(otp->password);
+	return used;
 }
+
 
 static int verify_password(const char *input)
 {
-	struct otp_list_data *otp;
+	struct otp_list_node *otp = otp_list.head;
 
 	pr_debug("OTP List: Checking password\n");
-	SLIST_FOREACH(otp, &otp_list, entries)
-	{
+	while (otp) {
 		if (strncmp(input, otp->password, MAX_PASSWORD_LEN) == 0) {
 			pr_debug("OTP List: Password verified\n");
 			return 1;
 		}
+		otp = otp->next;
 	}
 	pr_debug("OTP List: Password verification failed\n");
 	return 0;
@@ -87,19 +95,16 @@ static long otp_list_ioctl(struct file *filep, unsigned int cmd,
 			   unsigned long arg)
 {
 	char buffer[MAX_PASSWORD_LEN];
-	struct otp_list_data *otp;
+	struct otp_list_node *new_node;
 
 	pr_debug("OTP List: ioctl command received %u\n", cmd);
 	switch (cmd) {
 	case IOCTL_ADD_PASSWORD:
 		if (copy_from_user(buffer, (char __user *)arg, sizeof(buffer)))
 			return -EFAULT;
-		otp = new_entry(buffer);
-		if (!otp)
+		new_node = slist_insert_head(&otp_list, buffer);
+		if (!new_node)
 			return -EFAULT;
-
-		SLIST_INSERT_HEAD(&otp_list, otp, password);
-
 		pr_info("OTP List: Password added\n");
 		break;
 
@@ -265,10 +270,7 @@ static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
 static int __init otp_init(void)
 {
 	pr_debug("OTP Module: Initializing\n");
-	SLIST_INIT(&otp_list);
-	otp_list.password_count = 0;
-	otp_list.current_password_index = 0;
-
+	otp_list.head = NULL;
 	otp_totp.interval = TOTP_INTERVAL;
 
 	otp_list_major_number =

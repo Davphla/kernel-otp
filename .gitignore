@@ -49,3 +49,4 @@ TAGS
 *.zst
 .vagrant
 TODO.md
+*.o.d

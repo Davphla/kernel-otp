@@ -4,9 +4,9 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/lib/modules/$(uname -r)/build",
+                "/lib/modules/6.12.10-arch1-1/build/include/",
+                "/usr/src/linux/include/",
                 "/usr/include/"
-
             ],
             "defines": [],
             "compilerPath": "/usr/bin/clang",

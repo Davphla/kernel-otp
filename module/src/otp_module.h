@@ -13,8 +13,6 @@
 #include <linux/time.h>
 #include <crypto/hash.h>
 
-#include <linux/list.h>
-
 #define DEVICE_LIST_NAME "otp_list"
 #define DEVICE_TOTP_NAME "otp_totp"
 #define CLASS_NAME "otp_class"
@@ -34,21 +32,38 @@
 /**
  * Linked list of password
  */
-struct otp_list_data {
+struct otp_list_node {
 	char password[MAX_PASSWORD_LEN];
-	SLIST_ENTRY(my_entry) entries;
+	struct otp_list_node *next;
 };
 
-inline struct otp_list_data *new_entry(const char *val)
+struct otp_list_data {
+    struct otp_list_node *head;
+};
+
+inline struct otp_list_node *new_entry(const char *val)
 {
-	struct otp_list_data *e = kmalloc(sizeof(struct otp_list_data), GFP_KERNEL);
+	struct otp_list_node *e = kmalloc(sizeof(struct otp_list_node), GFP_KERNEL);
 	if (!e) {
-		printk(KERN_ERR "Malloc failed\n");
+		pr_err("Malloc failed\n");
         return NULL;
 	}
 	strncpy(e->password, val, MAX_PASSWORD_LEN);
     e->password[MAX_PASSWORD_LEN - 1] = '\0';
+	e->next = NULL;
 	return e;
+}
+
+inline struct otp_list_node *slist_insert_head(struct otp_list_data *list, const char *val)
+{
+	struct otp_list_node *new_node = new_entry(val);
+	if (!new_node) {
+		pr_err("Failed to create a new list node\n");
+		return NULL;
+	}
+	new_node->next = list->head;
+	list->head = new_node;
+	return new_node;
 }
 
 /**
