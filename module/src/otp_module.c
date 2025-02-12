@@ -49,8 +49,8 @@ static int otp_release(struct inode *inodep, struct file *filep)
 /*    OTP-list file_operation functions   */
 /******************************************/
 
-static ssize_t otp_list_read(struct file *filep, char __user *buffer, size_t len,
-			     loff_t *offset)
+static ssize_t otp_list_read(struct file *filep, char __user *buffer,
+			     size_t len, loff_t *offset)
 {
 	struct otp_list_node *node = otp_list.head;
 	char temp_buffer[MAX_PASSWORD_LEN * 10] = {};
@@ -58,11 +58,13 @@ static ssize_t otp_list_read(struct file *filep, char __user *buffer, size_t len
 
 	if (!node) {
 		pr_debug("OTP List: No password found\n");
-		return simple_read_from_buffer(buffer, len, offset, "No password found\n", 18);
+		return simple_read_from_buffer(buffer, len, offset,
+					       "No password found\n", 18);
 	}
 	pr_debug("OTP List: Reading all stored passwords\n");
 	while (node && used + MAX_PASSWORD_LEN + 2 < len) {
-		int written = snprintf(temp_buffer + used, MAX_PASSWORD_LEN + 2, "%s\n", node->password);
+		int written = snprintf(temp_buffer + used, MAX_PASSWORD_LEN + 2,
+				       "%s\n", node->password);
 		if (written < 0)
 			return -EFAULT;
 
@@ -73,7 +75,6 @@ static ssize_t otp_list_read(struct file *filep, char __user *buffer, size_t len
 		return -EFAULT;
 	return used;
 }
-
 
 static int verify_password(const char *input)
 {
