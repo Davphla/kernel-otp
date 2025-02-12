@@ -50,3 +50,6 @@ TAGS
 .vagrant
 TODO.md
 *.o.d
+
+otp_utilitaire
+obj
