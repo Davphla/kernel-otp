@@ -34,13 +34,13 @@ static struct file_operations otp_totp_fops = {
 
 static int otp_open(struct inode *inodep, struct file *filep)
 {
-	printk(KERN_INFO "OTP Device Opened\n");
+	pr_info("OTP Device Opened\n");
 	return 0;
 }
 
 static int otp_release(struct inode *inodep, struct file *filep)
 {
-	printk(KERN_INFO "OTP Device Closed\n");
+	pr_info("OTP Device Closed\n");
 	return 0;
 }
 
@@ -49,7 +49,7 @@ static int otp_release(struct inode *inodep, struct file *filep)
 /******************************************/
 
 /**
- * read all password ?
+ * read and return all password ?
  * TODO need to redo this
  */
 static ssize_t otp_list_read(struct file *filep, char *buffer, size_t len,
@@ -58,10 +58,10 @@ static ssize_t otp_list_read(struct file *filep, char *buffer, size_t len,
 	struct otp_list_data *otp = SLIST_FIRST(&otp_list);
 
 	if (!otp) {
-		printk(KERN_DEBUG "OTP List: No password found\n");
+		pr_debug("OTP List: No password found\n");
 		return -EFAULT;
 	}
-	printk(KERN_DEBUG "OTP List: Reading password\n");
+	pr_debug("OTP List: Reading password\n");
 	if (copy_to_user(buffer, otp->password, strlen(otp) + 1))
 		return -EFAULT;
 	return strlen(otp->password);
@@ -71,15 +71,15 @@ static int verify_password(const char *input)
 {
 	struct otp_list_data *otp;
 
-	printk(KERN_DEBUG "OTP List: Checking password\n");
+	pr_debug("OTP List: Checking password\n");
 	SLIST_FOREACH(otp, &otp_list, entries)
 	{
 		if (strncmp(input, otp->password, MAX_PASSWORD_LEN) == 0) {
-			printk(KERN_DEBUG "OTP List: Password verified\n");
+			pr_debug("OTP List: Password verified\n");
 			return 1;
 		}
 	}
-	printk(KERN_DEBUG "OTP List: Password verification failed\n");
+	pr_debug("OTP List: Password verification failed\n");
 	return 0;
 }
 
@@ -89,7 +89,7 @@ static long otp_list_ioctl(struct file *filep, unsigned int cmd,
 	char buffer[MAX_PASSWORD_LEN];
 	struct otp_list_data *otp;
 
-	printk(KERN_DEBUG "OTP List: ioctl command received %u\n", cmd);
+	pr_debug("OTP List: ioctl command received %u\n", cmd);
 	switch (cmd) {
 	case IOCTL_ADD_PASSWORD:
 		if (copy_from_user(buffer, (char __user *)arg, sizeof(buffer)))
@@ -100,7 +100,7 @@ static long otp_list_ioctl(struct file *filep, unsigned int cmd,
 
 		SLIST_INSERT_HEAD(&otp_list, otp, password);
 
-		printk(KERN_INFO "OTP List: Password added\n");
+		pr_info("OTP List: Password added\n");
 		break;
 
 	case IOCTL_VERIFY_PASSWORD:
@@ -109,12 +109,10 @@ static long otp_list_ioctl(struct file *filep, unsigned int cmd,
 			return -EFAULT;
 
 		if (verify_password(buffer)) {
-			printk(KERN_INFO
-			       "OTP List: Password verified successfully\n");
+			pr_info("OTP List: Password verified successfully\n");
 			return 1;
 		} else {
-			printk(KERN_INFO
-			       "OTP List: Password verification failed\n");
+			pr_info("OTP List: Password verification failed\n");
 			return 0;
 		}
 
@@ -142,13 +140,20 @@ static int generate_totp(char *key, int interval, char *output, size_t len)
 	timestamp = ts.tv_sec;
 	counter = timestamp / interval;
 
+	pr_info("[TOTP] Generating OTP - Timestamp: %llu, Counter: %llu\n",
+		timestamp, counter);
+
 	tfm = crypto_alloc_shash("hmac(sha1)", 0, 0);
-	if (IS_ERR(tfm))
+	if (IS_ERR(tfm)) {
+		pr_err("[TOTP] Failed to allocate crypto context\n");
+
 		return -EINVAL;
+	}
 
 	shash = kmalloc(sizeof(*shash) + crypto_shash_descsize(tfm),
 			GFP_KERNEL);
 	if (!shash) {
+		pr_err("[TOTP] Failed to allocate shash descriptor\n");
 		crypto_free_shash(tfm);
 		return -ENOMEM;
 	}
@@ -164,6 +169,7 @@ static int generate_totp(char *key, int interval, char *output, size_t len)
 	      1000000;
 
 	snprintf(output, len, "%06d\n", otp);
+	pr_info("[TOTP] Generated OTP: %06d\n", otp);
 	kfree(shash);
 	crypto_free_shash(tfm);
 	return 0;
@@ -175,12 +181,16 @@ static ssize_t otp_totp_read(struct file *filep, char *buffer, size_t len,
 	char otp[8];
 
 	if (generate_totp(otp_totp.key, otp_totp.interval, otp, sizeof(otp)) <
-	    0)
+	    0) {
+		pr_err("[TOTP] Failed to generate OTP\n");
 		return -EFAULT;
+	}
 
-	if (copy_to_user(buffer, otp, strlen(otp) + 1))
+	if (copy_to_user(buffer, otp, strlen(otp) + 1)) {
+		pr_err("[TOTP] Failed to copy OTP to user space\n");
 		return -EFAULT;
-
+	}
+	pr_info("[TOTP] OTP successfully read\n");
 	return strlen(otp);
 }
 
@@ -189,10 +199,16 @@ static int verify_totp(const char *input)
 	char expected_totp[7];
 	if (generate_totp(otp_totp.key, otp_totp.interval, expected_totp,
 			  sizeof(expected_totp)) < 0) {
+		pr_err("[TOTP] Failed to generate expected OTP for verification\n");
 		return 0;
 	}
-	if (strncmp(input, expected_totp, 6) == 0)
+	pr_info("[TOTP] Verifying OTP: Input: %s, Expected: %s\n", input,
+		expected_totp);
+	if (strncmp(input, expected_totp, 6) == 0) {
+		pr_info("[TOTP] OTP verification successful\n");
 		return 1;
+	}
+	pr_warn("[TOTP] OTP verification failed\n");
 	return 0;
 }
 
@@ -208,14 +224,14 @@ static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
 			return -EFAULT;
 
 		strncpy(otp_totp.key, buffer, TOTP_KEY_LEN);
-		printk(KERN_INFO "OTP TOTP: Key set\n");
+		pr_info("OTP TOTP: Key set\n");
 		break;
 
 	case IOCTL_SET_TOTP_INTERVAL:
 		interval = (int *)arg;
 		otp_totp.interval = *interval;
-		printk(KERN_INFO "OTP TOTP: Interval set to %d seconds\n",
-		       otp_totp.interval);
+		pr_info("OTP TOTP: Interval set to %d seconds\n",
+			otp_totp.interval);
 		break;
 
 	case IOCTL_VERIFY_TOTP:
@@ -223,12 +239,10 @@ static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
 			return -EFAULT;
 
 		if (verify_totp(buffer)) {
-			printk(KERN_INFO
-			       "OTP TOTP: TOTP verified successfully\n");
+			pr_info("OTP TOTP: TOTP verified successfully\n");
 			return 1;
 		} else {
-			printk(KERN_INFO
-			       "OTP TOTP: TOTP verification failed\n");
+			pr_info("OTP TOTP: TOTP verification failed\n");
 			return 0;
 		}
 
@@ -250,7 +264,7 @@ static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
  */
 static int __init otp_init(void)
 {
-	printk(KERN_DEBUG "OTP Module: Initializing\n");
+	pr_debug("OTP Module: Initializing\n");
 	SLIST_INIT(&otp_list);
 	otp_list.password_count = 0;
 	otp_list.current_password_index = 0;
@@ -274,7 +288,7 @@ static int __init otp_init(void)
 
 	otp_class = class_create(THIS_MODULE, CLASS_NAME);
 	if (IS_ERR(otp_class)) {
-		printk(KERN_ERR "OTP Module: Failed to create class\n");
+		pr_err("OTP Module: Failed to create class\n");
 		unregister_chrdev(otp_list_major_number, DEVICE_LIST_NAME);
 		unregister_chrdev(otp_totp_major_number, DEVICE_TOTP_NAME);
 		return PTR_ERR(otp_class);
@@ -300,7 +314,7 @@ static int __init otp_init(void)
 		return PTR_ERR(otp_list_device);
 	}
 
-	printk(KERN_INFO "OTP Module loaded\n");
+	pr_info("OTP Module loaded\n");
 	return 0;
 }
 
@@ -313,13 +327,13 @@ static int __init otp_init(void)
  */
 static void __exit otp_exit(void)
 {
-	printk(KERN_DEBUG "OTP Module: Exiting\n");
+	pr_debug("OTP Module: Exiting\n");
 	device_destroy(otp_class, MKDEV(otp_list_major_number, 0));
 	device_destroy(otp_class, MKDEV(otp_totp_major_number, 1));
 	class_destroy(otp_class);
 	unregister_chrdev(otp_list_major_number, DEVICE_LIST_NAME);
 	unregister_chrdev(otp_totp_major_number, DEVICE_TOTP_NAME);
-	printk(KERN_INFO "OTP Module unloaded\n");
+	pr_info("OTP Module unloaded\n");
 }
 
 module_init(otp_init);

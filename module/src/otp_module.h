@@ -13,7 +13,7 @@
 #include <linux/time.h>
 #include <crypto/hash.h>
 
-#include <sys/queue.h>
+#include <linux/list.h>
 
 #define DEVICE_LIST_NAME "otp_list"
 #define DEVICE_TOTP_NAME "otp_totp"
@@ -43,7 +43,7 @@ inline struct otp_list_data *new_entry(const char *val)
 {
 	struct otp_list_data *e = kmalloc(sizeof(struct otp_list_data), GFP_KERNEL);
 	if (!e) {
-		perror("malloc");
+		printk(KERN_ERR "Malloc failed\n");
         return NULL;
 	}
 	strncpy(e->password, val, MAX_PASSWORD_LEN);
@@ -74,9 +74,9 @@ static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
 			   unsigned long arg);
 
 /* Helper functions */
-int verify_password(const char *input);
-int verify_totp(const char *input);
-int generate_totp(char *key, int interval, char *output, size_t len);
+static int verify_password(const char *input);
+static int verify_totp(const char *input);
+static int generate_totp(char *key, int interval, char *output, size_t len);
 
 /* Module initialization and cleanup functions */
 static int __init otp_init(void);
