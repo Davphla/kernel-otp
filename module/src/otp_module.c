@@ -31,7 +31,7 @@ static struct file_operations otp_totp_fops = {
 /******************************************/
 
 static int otp_validity_duration = 30; // Default 30 seconds
-module_param(otp_validity_duration, int, 0644);
+module_param(otp_validity_duration, int, 0444);
 MODULE_PARM_DESC(otp_validity_duration,
 		 "Validity duration of OTP code in seconds");
 
@@ -377,10 +377,10 @@ static int __init otp_init(void)
 
 static void free_passwords(void)
 {
-	struct otp_list_node *current = otp_list.head;
-	while (current) {
-		struct otp_list_node *temp = current;
-		current = current->next;
+	struct otp_list_node *node = otp_list.head;
+	while (node) {
+		struct otp_list_node *temp = node;
+		node = node->next;
 		kfree(temp);
 	}
 	otp_list.head = NULL;

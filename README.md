@@ -2,49 +2,59 @@
 
 ## Créer et intéragir avec la vm :
 
-    vagrant up
+`vagrant up`
 
-    vagrant ssh
+`vagrant ssh`
 
-    sudo su -
+`sudo su -`
 
 ## Build et activer le module otp :
 
-    cd /otp_module
+`cd /otp_module`
 
-    make
+`make`
 
-    insmod otp.ko
+`insmod otp.ko [num_passwords=n] [otp_key="key"] [otp_validity_duration=seconds]`
 
 ## Désactiver et nettoyer le module otp :
 
-    cd /otp_module
+`cd /otp_module`
 
-    make clean
+`make clean`
 
-    rmmod otp
+`rmmod otp`
 
 ## Build l'utilitaire :
 
-    cd /otp_utilitaire
+`cd /otp_utilitaire`
 
-    make
+`make`
 
 ## Nettoyer l'utilitaire :
 
-    cd /otp_utilitaire
+`cd /otp_utilitaire`
 
-    make fclean
+`make fclean`
 
 ## Utiliser le module otp
 
 ### Afficher le dictionaire de mot de passe :
 
-    cat /dev/otp_list
+`cat /dev/otp_list`
 
 ### Afficher le code TOTP actuel :
 
-    cat /dev/otp_totp
+`cat /dev/otp_totp`
+
+### Modifiere les paramamètres :
+
+`echo 5 | tee /sys/module/otp/parameters/otp_validity_duration`
+
+(it is not possible to change the parameter num_passords after the module is loaded)
+
+### Afficher les paramètres :
+
+`cat /sys/module/otp/parameters/num_passwords`
 
 ## Utiliser l'utilitaire :
 
