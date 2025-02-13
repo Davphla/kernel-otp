@@ -280,6 +280,35 @@ static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
 	return 0;
 }
 
+static void generate_random_password(char *password, size_t length)
+{
+	static const char charset[] =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	int i;
+
+	for (i = 0; i < length - 1; i++) {
+		unsigned char rand_byte;
+		get_random_bytes(&rand_byte, 1);
+		password[i] = charset[rand_byte % (sizeof(charset) - 1)];
+	}
+	password[length - 1] = '\0';
+}
+
+static void generate_initial_passwords(void)
+{
+	int i;
+
+	for (i = 0; i < num_passwords; i++) {
+		struct otp_list_node *new_node =
+			kmalloc(sizeof(struct otp_list_node), GFP_KERNEL);
+		if (!new_node)
+			return;
+		generate_random_password(new_node->password, MAX_PASSWORD_LEN);
+		new_node->next = otp_list.head;
+		otp_list.head = new_node;
+	}
+}
+
 /**
  * otp_init - Initializes the OTP kernel module.
  *
@@ -337,11 +366,24 @@ static int __init otp_init(void)
 		return PTR_ERR(otp_list_device);
 	}
 
+	generate_initial_passwords();
+
 	pr_info("OTP Module loaded\n");
 	pr_info("OTP Module Validity Duration: %d seconds\n",
 		otp_validity_duration);
 	pr_info("OTP Module Number of Default Passwords: %d\n", num_passwords);
 	return 0;
+}
+
+static void free_passwords(void)
+{
+	struct otp_list_node *current = otp_list.head;
+	while (current) {
+		struct otp_list_node *temp = current;
+		current = current->next;
+		kfree(temp);
+	}
+	otp_list.head = NULL;
 }
 
 /**
@@ -354,6 +396,7 @@ static int __init otp_init(void)
 static void __exit otp_exit(void)
 {
 	pr_debug("OTP Module: Exiting\n");
+	free_passwords();
 	device_destroy(otp_class, MKDEV(otp_list_major_number, 0));
 	device_destroy(otp_class, MKDEV(otp_totp_major_number, 1));
 	class_destroy(otp_class);

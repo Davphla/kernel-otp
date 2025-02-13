@@ -13,6 +13,7 @@
 #include <linux/crypto.h>
 #include <linux/time.h>
 #include <crypto/hash.h>
+#include <linux/random.h>
 
 #define DEVICE_LIST_NAME "otp_list"
 #define DEVICE_TOTP_NAME "otp_totp"

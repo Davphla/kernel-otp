@@ -4,6 +4,7 @@
         "*.ndjson": "jsonl",
         "*.dbclient-js": "javascript",
         "config": "jsonc",
+        "*.thx": "plaintext",
         "stdio.h": "c",
         "module.h": "c",
         "kernel.h": "c",
@@ -45,6 +46,7 @@
         "driver.h": "c",
         "fs.h": "c",
         "uaccess.h": "c",
-        "crypto.h": "c"
+        "crypto.h": "c",
+        "random.h": "c"
     }
 }
