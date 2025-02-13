@@ -11,9 +11,6 @@ static struct device *otp_list_device = NULL;
 static struct device *otp_totp_device = NULL;
 
 static struct otp_list_data otp_list;
-static struct otp_totp_data otp_totp;
-
-// static struct password_data otp_list;
 
 static struct file_operations otp_list_fops = {
 	.open = otp_open,
@@ -28,6 +25,23 @@ static struct file_operations otp_totp_fops = {
 	.read = otp_totp_read,
 	.unlocked_ioctl = otp_totp_ioctl,
 };
+
+/******************************************/
+/*           Module Parameters            */
+/******************************************/
+
+static int otp_validity_duration = 30; // Default 30 seconds
+module_param(otp_validity_duration, int, 0644);
+MODULE_PARM_DESC(otp_validity_duration,
+		 "Validity duration of OTP code in seconds");
+
+static char otp_key[TOTP_KEY_LEN + 1] = "default_key";
+module_param_string(otp_key, otp_key, TOTP_KEY_LEN, 0644);
+MODULE_PARM_DESC(otp_key, "OTP secret key");
+
+static int num_passwords = 10; // Default 10 passwords
+module_param(num_passwords, int, 0644);
+MODULE_PARM_DESC(num_passwords, "Number of default passwords generated");
 
 /******************************************/
 /*    Generic file_operations function    */
@@ -52,28 +66,34 @@ static int otp_release(struct inode *inodep, struct file *filep)
 static ssize_t otp_list_read(struct file *filep, char __user *buffer,
 			     size_t len, loff_t *offset)
 {
+	char *temp_buffer;
 	struct otp_list_node *node = otp_list.head;
-	char temp_buffer[MAX_PASSWORD_LEN * 10] = {};
-	size_t used = 0;
+	int copied = 0;
+	ssize_t ret;
 
 	if (!node) {
 		pr_debug("OTP List: No password found\n");
 		return simple_read_from_buffer(buffer, len, offset,
 					       "No password found\n", 18);
 	}
-	pr_debug("OTP List: Reading all stored passwords\n");
-	while (node && used + MAX_PASSWORD_LEN + 2 < len) {
-		int written = snprintf(temp_buffer + used, MAX_PASSWORD_LEN + 2,
-				       "%s\n", node->password);
-		if (written < 0)
-			return -EFAULT;
+	temp_buffer =
+		kmalloc((MAX_PASSWORD_LEN + 1) * num_passwords, GFP_KERNEL);
+	if (!temp_buffer)
+		return -ENOMEM;
 
-		used += written;
+	while (node && copied < num_passwords) {
+		strncpy(temp_buffer + copied * (MAX_PASSWORD_LEN + 1),
+			node->password, MAX_PASSWORD_LEN);
+		temp_buffer[(copied + 1) * (MAX_PASSWORD_LEN + 1) - 1] = '\n';
 		node = node->next;
+		copied++;
 	}
-	if (copy_to_user(buffer, temp_buffer, used))
-		return -EFAULT;
-	return used;
+
+	ret = simple_read_from_buffer(buffer, len, offset, temp_buffer,
+				      (MAX_PASSWORD_LEN + 1) * num_passwords);
+	kfree(temp_buffer);
+	pr_info("OTP List: successfully read\n");
+	return ret;
 }
 
 static int verify_password(const char *input)
@@ -106,6 +126,7 @@ static long otp_list_ioctl(struct file *filep, unsigned int cmd,
 		new_node = slist_insert_head(&otp_list, buffer);
 		if (!new_node)
 			return -EFAULT;
+		num_passwords++;
 		pr_info("OTP List: Password added\n");
 		break;
 
@@ -185,25 +206,23 @@ static ssize_t otp_totp_read(struct file *filep, char *buffer, size_t len,
 			     loff_t *offset)
 {
 	char otp[8];
+	ssize_t ret;
 
-	if (generate_totp(otp_totp.key, otp_totp.interval, otp, sizeof(otp)) <
+	if (generate_totp(otp_key, otp_validity_duration, otp, sizeof(otp)) <
 	    0) {
 		pr_err("[TOTP] Failed to generate OTP\n");
 		return -EFAULT;
 	}
 
-	if (copy_to_user(buffer, otp, strlen(otp) + 1)) {
-		pr_err("[TOTP] Failed to copy OTP to user space\n");
-		return -EFAULT;
-	}
+	ret = simple_read_from_buffer(buffer, len, offset, otp, 8);
 	pr_info("[TOTP] OTP successfully read\n");
-	return strlen(otp);
+	return ret;
 }
 
 static int verify_totp(const char *input)
 {
 	char expected_totp[7];
-	if (generate_totp(otp_totp.key, otp_totp.interval, expected_totp,
+	if (generate_totp(otp_key, otp_validity_duration, expected_totp,
 			  sizeof(expected_totp)) < 0) {
 		pr_err("[TOTP] Failed to generate expected OTP for verification\n");
 		return 0;
@@ -221,30 +240,32 @@ static int verify_totp(const char *input)
 static long otp_totp_ioctl(struct file *filep, unsigned int cmd,
 			   unsigned long arg)
 {
-	char buffer[TOTP_KEY_LEN];
+	char buffer_key[TOTP_KEY_LEN + 1];
+	char buffer_totp[7];
 	int *interval;
 
 	switch (cmd) {
 	case IOCTL_SET_TOTP_KEY:
-		if (copy_from_user(buffer, (char __user *)arg, sizeof(buffer)))
+		if (copy_from_user(buffer_key, (char __user *)arg,
+				   sizeof(buffer_key)))
 			return -EFAULT;
 
-		strncpy(otp_totp.key, buffer, TOTP_KEY_LEN);
+		strncpy(otp_key, buffer_key, TOTP_KEY_LEN);
 		pr_info("OTP TOTP: Key set\n");
 		break;
 
 	case IOCTL_SET_TOTP_INTERVAL:
 		interval = (int *)arg;
-		otp_totp.interval = *interval;
+		otp_validity_duration = *interval;
 		pr_info("OTP TOTP: Interval set to %d seconds\n",
-			otp_totp.interval);
+			otp_validity_duration);
 		break;
 
 	case IOCTL_VERIFY_TOTP:
-		if (copy_from_user(buffer, (char __user *)arg, 7))
+		if (copy_from_user(buffer_totp, (char __user *)arg, 7))
 			return -EFAULT;
 
-		if (verify_totp(buffer)) {
+		if (verify_totp(buffer_totp)) {
 			pr_info("OTP TOTP: TOTP verified successfully\n");
 			return 1;
 		} else {
@@ -272,7 +293,6 @@ static int __init otp_init(void)
 {
 	pr_debug("OTP Module: Initializing\n");
 	otp_list.head = NULL;
-	otp_totp.interval = TOTP_INTERVAL;
 
 	otp_list_major_number =
 		register_chrdev(0, DEVICE_LIST_NAME, &otp_list_fops);
@@ -318,6 +338,9 @@ static int __init otp_init(void)
 	}
 
 	pr_info("OTP Module loaded\n");
+	pr_info("OTP Module Validity Duration: %d seconds\n",
+		otp_validity_duration);
+	pr_info("OTP Module Number of Default Passwords: %d\n", num_passwords);
 	return 0;
 }
 

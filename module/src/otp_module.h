@@ -4,6 +4,7 @@
 #include <linux/ioctl.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#include <linux/moduleparam.h>
 #include <linux/uaccess.h>
 #include <linux/device.h>
 #include <linux/slab.h>
@@ -38,23 +39,25 @@ struct otp_list_node {
 };
 
 struct otp_list_data {
-    struct otp_list_node *head;
+	struct otp_list_node *head;
 };
 
 inline struct otp_list_node *new_entry(const char *val)
 {
-	struct otp_list_node *e = kmalloc(sizeof(struct otp_list_node), GFP_KERNEL);
+	struct otp_list_node *e =
+		kmalloc(sizeof(struct otp_list_node), GFP_KERNEL);
 	if (!e) {
 		pr_err("Malloc failed\n");
-        return NULL;
+		return NULL;
 	}
 	strncpy(e->password, val, MAX_PASSWORD_LEN);
-    e->password[MAX_PASSWORD_LEN - 1] = '\0';
+	e->password[MAX_PASSWORD_LEN - 1] = '\0';
 	e->next = NULL;
 	return e;
 }
 
-inline struct otp_list_node *slist_insert_head(struct otp_list_data *list, const char *val)
+inline struct otp_list_node *slist_insert_head(struct otp_list_data *list,
+					       const char *val)
 {
 	struct otp_list_node *new_node = new_entry(val);
 	if (!new_node) {
@@ -65,16 +68,6 @@ inline struct otp_list_node *slist_insert_head(struct otp_list_data *list, const
 	list->head = new_node;
 	return new_node;
 }
-
-/**
- * struct otp_totp_data - Stores TOTP key and interval.
- * @key: Secret key used for TOTP generation.
- * @interval: Time interval for TOTP validity.
- */
-struct otp_totp_data {
-	char key[TOTP_KEY_LEN];
-	int interval;
-};
 
 /* Function prototypes */
 static int otp_open(struct inode *inodep, struct file *filep);
